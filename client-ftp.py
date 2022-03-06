@@ -4,6 +4,8 @@ import re
 from select import select
 import socket
 from tkinter import W
+# Implemented by Jose Eduardo Soto
+from reliable_data_transfer import ReliableDataTransferProtocol
 
 '''A class for encapsulating a user setting up a connection. Its called a dialogue.'''
 class ClientDialogue:
@@ -59,8 +61,9 @@ class ClientDialogue:
                 self.server_port = int('0') if not valid_input else int(user_input)
 
     def start_connection(self):
-        # Socket for TCP connections
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Change to UDP. NOW IN UDP
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket = ReliableDataTransferProtocol(sock)
         # We connect to our server
         self.socket.connect((self.server_ip, self.server_port))
         # Timeout for testing and debugging
