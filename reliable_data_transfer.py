@@ -44,11 +44,40 @@ class ReliableDataTransferProtocol:
 
     def __init__(self):
         self._udp_sock = socket(AF_INET, SOCK_DGRAM)
+        self._s_port: int = 0
+        self._d_port: int = 0
+        self._seq: int = 0
+        self._ack: int = 0
+        self._offset: int = 0
+        self._resrv: int = 0
+        self._flag: int = 0
+        self._w_size: int = 0
+        self._checksum: int = 0
+        self._urg_p: int = 0
+
 
     def __init__(self, ip_port: Tuple[str, int]):
         self_udp_sock = socket(AF_INET, SOCK_DGRAM)
         self._addr = deepcopy(ip_port)
         self._udp_sock.bind(ip_port)
+        self._s_port: int = 0
+        self._d_port: int = 0
+        self._seq: int = 0
+        self._ack: int = 0
+        self._offset: int = 0
+        self._resrv: int = 0
+        self._flag: int = 0
+        self._w_size: int = 0
+        self._checksum: int = 0
+        self._urg_p: int = 0
+
+    '''Need methods that produces and consumes RDT header data.'''
+
+    def _produce_header(self, data: bytes):
+        pass
+
+    def _consumer_header(self, data: bytes):
+        pass
 
     ''' Wrapper functions so clients & servers don't have to know the 
     difference'''
