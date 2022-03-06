@@ -87,7 +87,6 @@ if __name__ == '__main__':
     print('Listening...', end='')
     listening_socket.listen(5)
     while True:
-        #TODO: Figure out how to de-mux.
         connection, address = listening_socket.accept()
         session = FTPSession(connection, address)
         session.start()
