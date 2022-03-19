@@ -4,42 +4,7 @@ from typing import Tuple
 
 class ReliableDataTransferProtocol:
     '''
-    source port 16 bits(2 bytes size char)
-    destination port 16 bits (2 bytes size char)
     sequence number 32 bits (4 byte integer)
-    ack number 32 bits (4 byte integer)
-    data offset in octets 4 bits(), num of 32-bit words
-    reserved bits 3 bits, does nothing. set to 0
-    flags 9 bits:
-        NS - ECN-nonce concealment protection
-        CWR - Congestion window reduced flag set by the sending host that it 
-        received a TCP segment with the ECE flag set and had responded in 
-        congestion control mechanism. 
-        ECE - ECN-Echo has a dual role, depending on the value of the SYN flag. 
-        It indicates: if the SYN flag is set(1), the TCP peer is ECN capable. If
-        the SYN flag is clear (0), that packet with Congestion Experience flag 
-        set (ECN=11) in the IP header was received during normal transmission. 
-        This serves as an indication of network congestion (or impending 
-        congestion) to the TCP sender. 
-        URG - Indicates thet the urgent pointer field is significant.
-        ACK - Indicatees that the acknolwedgement field is significant. All 
-        packets after the initial SYN packet sent by the cliet should have this
-        flag set. 
-        PSH - Push function, Asks to push the buffered data to the receiving 
-        application. 
-        RST - Reset the connection
-        SYN - Synchronize sequence numbers. Only the first packet send from each
-        end should have this flag set. Some other flags and fields change 
-        meaning based on this flag, and some are only valid when it is set, and
-        others when it is clear. 
-        FIN - The last packet from the sender. 
-    Window Size 16 bits, The size of the receive window, which specifies the 
-    number of window size units that the sender of this segment is currently 
-    willing to receive. 
-    Checksum 16 bits
-    Urgent pointer 16 bits, If the URG flag is set, then this 16-bit field is an
-     offest from the sequence number indicating the last urgent data byte.
-    There will be no Options bits.
     '''
 
     def __init__(self):
@@ -47,13 +12,6 @@ class ReliableDataTransferProtocol:
         self._s_port: int = 0
         self._d_port: int = 0
         self._seq: int = 0
-        self._ack: int = 0
-        self._offset: int = 0
-        self._resrv: int = 0
-        self._flag: int = 0
-        self._w_size: int = 0
-        self._checksum: int = 0
-        self._urg_p: int = 0
 
 
     def __init__(self, ip_port: Tuple[str, int]):
@@ -63,20 +21,21 @@ class ReliableDataTransferProtocol:
         self._s_port: int = 0
         self._d_port: int = 0
         self._seq: int = 0
-        self._ack: int = 0
-        self._offset: int = 0
-        self._resrv: int = 0
-        self._flag: int = 0
-        self._w_size: int = 0
-        self._checksum: int = 0
-        self._urg_p: int = 0
 
     '''Need methods that produces and consumes RDT header data.'''
+    @classmethod
+    def __encode(cls, i: int, fill: int) -> bytes:
+        return str(i).zfill(fill).encode()
 
     def _produce_header(self, data: bytes):
-        pass
+        '''I won't be implementing bit size headers as its done in TCP but 
+        rather implement it with just utf encoding instead.'''
+        return self.__encode(self._s_port, 5) \
+            + self.__encode(self._d_port, 5) \
+            + self.__encode(self._seq, 10) + data 
 
     def _consumer_header(self, data: bytes):
+        self._seq 
         pass
 
     ''' Wrapper functions so clients & servers don't have to know the 
@@ -130,3 +89,5 @@ class ReliableDataTransferProtocol:
     #TODO: implement
     def send(self, message: bytes):
         pass
+
+    
