@@ -1,9 +1,10 @@
 from genericpath import exists
 from multiprocessing import connection
 import os
-from socket import AF_INET, SOCK_STREAM, socket
+from socket import AF_INET, SOCK_DGRAM, SOCK_STREAM, socket
 from threading import Thread
 import re
+from reliable_data_transfer import ReliableDataTransferProtocol
 
 port_regex_pattern = re.compile('^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4]' +
     '[0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$')
@@ -12,7 +13,9 @@ class FTPSession(Thread):
 
     def __init__(self, connection, address):
         Thread.__init__(self)
-        self.socket = connection
+        '''Change the socket into a wrapper that handles the UDP reliable
+        connection.'''
+        self.socket = ReliableDataTransferProtocol(connection)
         self.addr = address
         print('Connection accepted from ' + self.addr[0])
 
@@ -78,7 +81,8 @@ def validate_port(input):
 
 if __name__ == '__main__':
     connections = []
-    listening_socket = socket(AF_INET, SOCK_STREAM)
+    #Now in UDP
+    listening_socket = ReliableDataTransferProtocol()
     listening_socket.bind(('10.0.0.20', process_port()))
     print('Listening...', end='')
     listening_socket.listen(5)
