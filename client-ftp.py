@@ -16,6 +16,7 @@ class ClientDialogue:
         self.dialogue.append('Provide Server IP: ')
         self.dialogue.append('Provide Port#: ')
         self.dialogue.append('You are now connected. Enter your commands now.\n')
+        self.dialogue.append('Provide Protocol: ')
         self.recv = 'Received '
         self.prompt = 'client-ftp>'
         # Connection information for dialogue
@@ -32,6 +33,7 @@ class ClientDialogue:
         # Process loops for input
         self.process_user_input('ip')
         self.process_user_input('port')
+        self.process_user_input('protocol')
         # Print for debugging
         print(str(self))
         # Start connection
@@ -59,11 +61,17 @@ class ClientDialogue:
                 valid_input = self._validate_port(user_input)
                 # Sets the port for the session
                 self.server_port = int('0') if not valid_input else int(user_input)
+            if input_type == 'protocol':
+                # Prompt for protocol
+                user_input = input(self.dialogue[3])
+                # Validate the protocol
+                valid_input = (user_input == 'gbn' or user_input == 'sr')
+                self.protocol = '' if not valid_input else user_input
+
 
     def start_connection(self):
         # Change to UDP. NOW IN UDP
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket = ReliableDataTransferProtocol(sock)
+        self.socket = ReliableDataTransferProtocol(self.protocol)
         # We connect to our server
         self.socket.connect((self.server_ip, self.server_port))
         # Timeout for testing and debugging
@@ -79,12 +87,12 @@ class ClientDialogue:
             # Handle retrieve command by user. This gets the file. 
             if command[0] == 'RETR':
                 # Puts together the command again for sending
-                self.socket.sendall(' '.join(command).encode())
+                self.socket.send(' '.join(command).encode())
                 # Process the file
                 self._process_file(command[1])
             # Handle the close command
             elif command[0] == 'CLOSE':
-                self.socket.sendall(' '.join(command).encode())
+                self.socket.send(' '.join(command).encode())
                 # Breaks the loop and allows for the rest of the commands to complete
                 break
     

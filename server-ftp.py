@@ -40,7 +40,7 @@ class FTPSession(Thread):
                     # Send the file
                     self.send_file(file_path)
                 else:
-                    self.socket.sendall('NO')
+                    self.socket.send('NO')
             elif message[0] == 'CLOSE':
                 print('Connection closed, See you later!')
                 self.socket.close()
@@ -56,13 +56,13 @@ class FTPSession(Thread):
 
     def send_file(self, file_path):
         self.socket.send(b'OK')
-        self.socket.sendall(self.header)
+        self.socket.send(self.header)
         with open(file_path, 'rb') as _file:
             # To send only 1000 bytes at a time
             data = _file.read(1000)
             while data:
                 # Send truncated header and data together
-                self.socket.sendall(data)
+                self.socket.send(data)
                 data = _file.read(1000)
             print('Transfer Complete!')
 
@@ -82,7 +82,11 @@ def validate_port(input):
 if __name__ == '__main__':
     connections = []
     #Now in UDP
-    listening_socket = ReliableDataTransferProtocol()
+    while True:
+        protocol = input('Protocol(gbn or sr): ')
+        if protocol == 'gbn' or protocol == 'sr' or protocol == '':
+            break
+    listening_socket = ReliableDataTransferProtocol(protocol)
     listening_socket.bind(('10.0.0.20', process_port()))
     print('Listening...', end='')
     listening_socket.listen(5)
