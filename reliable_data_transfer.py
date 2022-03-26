@@ -1,28 +1,36 @@
 from copy import deepcopy
-from curses import window
-from email.mime import base
-from http import client
 from socket import AF_INET, SOCK_STREAM, socket
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from HelperModule.packet import extract, make, make_empty
 from HelperModule.timer import Timer
 from HelperModule.udt import recv, send
+from SRWindow import SRWindow
 
 class ReliableDataTransferProtocol:
 
     # sequence number 32 bits (4 byte integer)
     _seq: int = 0
+    # base indexx
+    _base: int = 0
     # window size
-    _win_size = 5
+    _win_size: int = 5
+    # window
+    _window: List[bytes] = []
+    # Next Sequence Number
+    _next_seq: int = 1
+    # Flag for state of sending
+    _sending: bytes = False
+    # Counter for sending attempts limit
+    _sending_tries: int = 5
     # address of this socket
     _addr: Tuple[str, int] = None
     # udp socket for transmitting
     _udp_sock: socket = None
     # save client info
-    _client_ip_port = None
+    _client_ip_port: Tuple[str, int] = None
     # helper timer object
-    _timer = Timer(2)
+    _timer: Timer = Timer(2)
 
     def __init__(self, sock: socket = socket(AF_INET, SOCK_STREAM), protocol = 'gbn'):
         self._udp_sock = sock
@@ -51,6 +59,7 @@ class ReliableDataTransferProtocol:
         return self._udp_sock.recv(size)
 
     def recv(self, bytes_to_read: int) -> bytes:
+        print('recv called')
         if self._protocol == 'gbn':
             return self._gbn_recv(bytes_to_read)
         if self._protocol == 'sr':
@@ -66,106 +75,137 @@ class ReliableDataTransferProtocol:
         return self._udp_sock.close()
 
     def send(self, message: bytes):
+        print('send called')
         if self._protocol == 'gbn':
             self._gbn_send(message)
         if self._protocol == 'sr':
             self._sr_send(message)
 
-    #TODO: Implement this
+    #TODO: Test this
     def _gbn_send(self, message: bytes):
-        # Set up
-        global base
-        global window
-        global len_mess
-        global finished
-        base = 0
-        window = []
-        len_mess = len(message)
-        finished = False
-        # Method for sending packets
-        def send_window_packets(i: int = 0, j: int = self._win_size):
-            global window
-            print(len(window))
-            for p in range(i, j):
-                send(window[p], self._udp_sock, self._client_ip_port)
-        # Method for filling the sliding window
-        def fill_window(slide: int = self._win_size, initial: bool = False, message = message):
-            global base
-            global window
-            global len_mess
-            for i in range(slide + 1):
-                if not initial:
-                    window.pop(0)
-                b = window_base_index()
-                e = end_index()
-                window.append(make(self._seq, message[b: e]))
-                self._seq += 1
-                base += 1
-                if len_mess < e:
-                    finished = True
-                    break
-        # Method for getting byte window base index
-        def window_base_index():
-            global base
-            return base * 1020
-        # Method for getting byte end index
-        def end_index():
-            global base
-            return (base + self._win_size) * 1020
-        # Fill up initial window
-        fill_window(initial=True)
-        while not finished:
-            # Send all of the packets in the window
-            send_window_packets(base, base+self._win_size)
-            # Wait for ACKs from the receiver. 
-            try:
-                data: bytes = recv(self._udp_sock)
-                # See what data we received.
-                ack_num, data = extract(data)
-                if ack_num >= base and ack_num < (base + self._win_size):
-                    # update the base and slide the window
-                    amount_to_dequeue = ack_num - base + 1
-                    fill_window(amount_to_dequeue)
-            except socket.timeout:
-                # Resend window
-                send_window_packets(base, base+self._win_size)
+        print('gbn send called.')
+        self._sending = True
+        while self._sending:
+            # Generate window based on message size and send
+            self._generate_and_send_window(message)
+            # Loop for sending if no correct ACKS received. 
+            while self._sending_tries > 0:
+                try:
+                    # Listen for ACKs and Handle them
+                    self._listen_and_handle_acks()
+                except:
+                    # Resend all of the window
+                    self._send_all_window()
+                    # Decrement the sending count
+                    self._sending_tries -= 1
+        
+    def _generate_and_send_window(self, message: bytes):
+        # Add packets into window win_size number of times. 
+        y = (self._win_size - len(self._window))
+        for i in range(y):
+            # Size of packet must iterate a certain amount
+            packet_index: int = self._base * 1020
+            # Data to be sent
+            data: bytes = message[packet_index: packet_index + 1021]
+            # Check if data is small. Its a sign that its the end of the message
+            if len(data) < 1020:
+                # Set sending flag to false. Done with message. 
+                self._sending = False
+                # Stop the loop
+                break
+            # Make packet
+            packet: bytes = make(self._seq, data)
+            # Make and add packet to window
+            self._window.append(make(self._seq, data))
+            # Increment the sequence number
+            self._seq += 1
+            # Send each packet added
+            send(packet, self._udp_sock, self._client_ip_port)
+            # Debug
+            print('sending: seq-' + str(self._seq))
 
-    #TODO: Implement this
+    def _send_all_window(self):
+        # Simply send all the packets
+        for packet in self._window:
+            send(packet, self._udp_sock, self._client_ip_port)
+
+    def _listen_and_handle_acks(self):
+        print('listen-and-handle called')
+        good_ack_received = False
+        while not good_ack_received:
+            # Listen to socket
+            print('recving packets')
+            packet, addr = recv(self._udp_sock)
+            # Extract ack num and data
+            print('extracting packets')
+            ack_num, data = extract(packet)
+            # Check if ack number is correct
+            if ack_num >= self._base and ack_num < self._next_seq:
+                # Pop out everything that has been ACKed
+                amount_to_remove = ack_num - self._base + 1
+                # Set subset of window as the new window
+                self._window = self._window[amount_to_remove:]
+                # Flag that an acceptable ACK was received
+                good_ack_received = True
+
+    #TODO: test this 
     def _gbn_recv(self, size: int) -> bytes:
-        delv_mesg = b''
-        counter = 0
-        time_out_counter = 0
+        print('gbn recv called')
+        message: bytes = b''
         while True:
-            # Receive
-            try:
-                packet, sender_addr = recv(self._udp_sock)
-                # extract ack_num from packet
-                ack_num, data = extract(packet)
-                # Check if ack number is what we are expecting.
-                if ack_num != self._seq:
-                    # If not, send the old ack
-                    send(make(self._seq, make_empty()), self._udp_sock, sender_addr)
+            # Check if seq received is the next one expected.
+            packet, server_addr = recv(self._udp_sock)
+            seq_num, data = extract(packet)
+            if seq_num is self._seq:
+                # Increment sequence
+                self._seq += 1
+                # If there is data append it to the cumulative message.
+                if data:
+                    # Add data to send up
+                    message = message + data
+                # If there is no data, we can end and send message back to app.
                 else:
-                    # Send ack
-                    send(make(ack_num, make_empty()), self._udp_sock, sender_addr)
-                    # Gather to send up
-                    delv_mesg = delv_mesg + data
-                    # Increment count
-                    counter += len(data)
-                    # Increase seq num
-                    self._seq += 1
-                    if counter >= size:
-                        break
-            except:
-                # Try again at least 3 times
-                time_out_counter += 1
-                if time_out_counter == 3:
-                    raise TimeoutError('Timeout expired.')
-        return delv_mesg 
+                    break
+            send(make(self._seq, make_empty()), self._udp_sock, self._client_ip_port)
+            # debug
+            print('acking: ack-' + str(self._seq))
+        return message
 
     #TODO: Implement this
     def _sr_send(self, message: bytes):
+        self._base = 0
+        # Fill up window, send, and start timer
+        sr_window = SRWindow(self._win_size)
+        for i in range(self._win_size):
+            segment = self._base * 1020
+            data = message[segment: segment + 1021]
+            timer = Timer(3)
+            packet = make(self._seq, data)
+            sr_window.append(self._seq, packet, timer)
+            send(packet, self._udp_sock, self._client_ip_port)
+            timer.start()
+        # Listen for acks
+
         pass
+
+    def _sr_fill_window(self, window: SRWindow, packet_num: int, message: bytes) -> bool:
+       # Initialize the window with packets 
+        while True:
+            packet_section = self._base * 1020
+            data = message[packet_section:packet_section + 1021]
+            timer = Timer(3)
+            packet = make(self._seq, data)
+            window.append(self._seq, packet, timer)
+            send(packet, self._udp_sock, self._client_ip_port)
+            self._seq += 1
+            self._base += 1
+            timer.start()
+            if len(packet) < 1025:
+                break
+            if len(self._window) == self._win_size:
+                break
+        return len(self._window) 
+
 
     #TODO: Implement this
     def _sr_recv(self, num: int) -> bytes:
